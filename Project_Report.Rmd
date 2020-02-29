@@ -7,6 +7,12 @@ output: html_document
 
 ### MARKDOWN FILE FOR PROJECT REPORT
 
+*A 4 page report contains*
+- a brief introduction of the project
+- description of the source of data
+- how you retrieve and process the data
+- user guide of the application
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
