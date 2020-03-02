@@ -8,41 +8,32 @@
 #
 
 library(shiny)
+library(RSocrata)
 
-# Define UI for application that draws a histogram
+app_key <- Sys.getenv("APP_KEY")
+api_endpoint <- "https://data.cms.gov/resource/97k6-zzx3.json"
+
+drg_groups <- read.socrata("https://data.cms.gov/resource/97k6-zzx3.json?$select=distinct drg_definition&$order=drg_definition", app_key)
+drg_groups <- drg_groups$drg_definition
+
 ui <- fluidPage(
    
-   # Application title
-   titlePanel("Old Faithful Geyser Data"),
+   titlePanel("Hospital Data"),
    
-   # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-         sliderInput("bins",
-                     "Number of bins:",
-                     min = 1,
-                     max = 50,
-                     value = 30)
+         selectInput("drg_group",
+                     "DRG group",
+                     drg_groups      
+                     )
       ),
-      
-      # Show a plot of the generated distribution
-      mainPanel(
-         plotOutput("distPlot")
-      )
+       mainPanel("hi")
    )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
    
-   output$distPlot <- renderPlot({
-      # generate bins based on input$bins from ui.R
-      x    <- faithful[, 2] 
-      bins <- seq(min(x), max(x), length.out = input$bins + 1)
-      
-      # draw the histogram with the specified number of bins
-      hist(x, breaks = bins, col = 'darkgray', border = 'white')
-   })
 }
 
 # Run the application 
