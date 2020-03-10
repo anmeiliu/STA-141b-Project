@@ -20,7 +20,7 @@ hospital_data <- sqldf("SELECT *
               JOIN zipcodes USING(zip)")
 
 #Finding total number of discharges per hospital (regardless of DRG_Definition)
-hospital_info <- sqldf("SELECT provider_name, AVG(provider_id) AS provider_id, SUM(total_discharges) AS total_discharge_per_hospital FROM hospital_data GROUP BY provider_id")
+hospital_info <- sqldf("SELECT provider_name, AVG(provider_id) AS provider_id, SUM(total_discharges) AS total_discharges_per_hospital FROM hospital_data GROUP BY provider_id")
 
 #Joining total number of discharges per hospital to original dataset 
 hospital_data2 <-  sqldf("SELECT *
