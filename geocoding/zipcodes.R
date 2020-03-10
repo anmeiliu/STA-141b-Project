@@ -9,7 +9,7 @@ library(plotly)
 data <- fromJSON("https://data.cms.gov/resource/97k6-zzx3.json")
 
 #Coordinates for all zipcodes in US
-zipcodes <- read.csv("uszips.csv")
+zipcodes <- read.csv("geocoding/uszips.csv")
 
 #Data processing
 data <- data %>% rename(zip = provider_zip_code) 
