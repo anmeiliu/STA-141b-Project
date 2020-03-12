@@ -10,8 +10,9 @@
 library(jsonlite)
 library(tidyverse)
 library(sqldf)
+library(RSocrata)
 
-data <- fromJSON("https://data.cms.gov/resource/97k6-zzx3.json")
+data <- read.socrata("https://data.cms.gov/resource/97k6-zzx3.json?$limit=164000")
 
 data <- data %>% rename(zip = provider_zip_code) 
 zipcodes <- read.csv("uszips.csv")
