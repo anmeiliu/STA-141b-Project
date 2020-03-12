@@ -7,10 +7,14 @@
 #    http://shiny.rstudio.com/
 #
 
+library(jsonlite)
+library(tidyverse)
+library(sqldf)
+
 data <- fromJSON("https://data.cms.gov/resource/97k6-zzx3.json")
 
 data <- data %>% rename(zip = provider_zip_code) 
-zipcodes <- read.csv("geocoding/uszips.csv")
+zipcodes <- read.csv("uszips.csv")
 
 #Joining Data, finding coordinates based on zip codes
 hospital_data <- sqldf("SELECT *
