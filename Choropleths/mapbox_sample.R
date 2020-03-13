@@ -1,6 +1,9 @@
 library(tidyverse)
 library(jsonlite)
 library(plotly)
+library(RSocrata)
+
+source("HospitalViz/api_helper.R")
 
 zip_agg <- get_api_call(list("$select" = c("provider_zip_code","sum(total_discharges)"), "$group" = "provider_zip_code", "$limit" = "50000"))
 zipcode_ref <- read_csv("geocoding/uszips.csv", col_types = cols(zip = col_integer(), county_fips = col_character()))
