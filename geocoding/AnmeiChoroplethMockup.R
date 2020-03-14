@@ -33,9 +33,12 @@ server <- function(input, output) {
         mutate(zip = as.integer(provider_zip_code)) %>% 
         left_join(zipcode_ref, by = "zip") %>% 
         select(sum_total_discharges, 
-               county_fips) %>% 
-        group_by(county_fips) %>% 
-        summarise(value = sum(as.integer(sum_total_discharges))) %>% 
+               population,
+               county_fips,
+               county_name) %>% 
+        group_by(county_fips, county_name) %>% 
+        summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>% 
+        mutate(region_name = county_name) %>%
         rename(region = county_fips)
       colorscale <- "Reds"
       zmax <- 50000
@@ -47,15 +50,28 @@ server <- function(input, output) {
                                      "$group" = "provider_state"))
       agg <- state_agg %>% 
         rename(state_id = provider_state) %>% 
-        left_join(zipcode_ref, by = "state_id") %>% 
+        left_join(zipcode_ref %>% 
+                    group_by(state_id, state_name) %>% 
+                    summarize(population = sum(population)), 
+                  by = "state_id") %>% 
         select(sum_total_discharges, 
+               population,
                state_name) %>% 
         group_by(state_name) %>% 
-        summarise(value = sum(as.integer(sum_total_discharges))) %>% 
+        summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>%
+        mutate(region_name = state_name) %>%
         rename(region = state_name)
       colorscale <- "Reds"
-      zmax <- 100000000
+      zmax <- 600000
     }
+    
+    agg <- agg %>% mutate(hover = paste(
+      region_name,
+      "<br />Population:",
+      prettyNum(pop, big.mark = ","),
+      "<br />Discharges:",
+      prettyNum(value, big.mark = ",")
+    ))
     
     fig <- plot_ly() 
     fig <- fig %>% add_trace(
@@ -70,14 +86,18 @@ server <- function(input, output) {
       marker=list(line=list(
         width=0),
         opacity=0.5
-      )
+      ),
+      text=agg$hover,
+      hoverinfo = "text"
     )
+    
     fig <- fig %>% layout(
       mapbox=list(
         style="carto-positron",
         zoom =2,
         center=list(lon= -95.71, lat=37.09))
     )
+    
     fig
   })
 }
