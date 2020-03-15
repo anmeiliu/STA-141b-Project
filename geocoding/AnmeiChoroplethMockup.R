@@ -85,9 +85,9 @@ server <- function(input, output) {
     agg <- agg %>% mutate(hover = paste(
       region_name,
       "<br />Population:",
-      prettyNum(pop, big.mark = ","),
+      pretty_print_large_number(pop),
       "<br />Discharges:",
-      prettyNum(value, big.mark = ",")
+      pretty_print_large_number(value)
     ))
     
     if (input$log_scale) {
@@ -95,12 +95,12 @@ server <- function(input, output) {
       zmin <- log(zmin, log_scale_base)
       zmax <- log(zmax, log_scale_base)
       tickvals <- zmin + ((zmax - zmin) * c(0, 0.2, 0.4, 0.6, 0.8, 1))
-      ticktext <- sapply(log_scale_base^tickvals, pretty_print_large_number)
+      ticktext <- pretty_print_large_number(log_scale_base^tickvals)
       tickmode <- "array"
     } else {
       zmin <- 0
       tickvals <- zmin + ((zmax - zmin) * c(0, 0.2, 0.4, 0.6, 0.8, 1))
-      ticktext <- sapply(tickvals, pretty_print_large_number)
+      ticktext <- pretty_print_large_number(tickvals)
       tickmode <- default_tick_mode
     }
     
