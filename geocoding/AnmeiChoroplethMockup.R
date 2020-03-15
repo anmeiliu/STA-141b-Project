@@ -44,12 +44,11 @@ server <- function(input, output) {
                county_fips,
                county_name) %>% 
         group_by(county_fips, county_name) %>% 
-        summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>% 
+        summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>%
+        drop_na() %>%
         mutate(region_name = county_name) %>%
         rename(region = county_fips)
       colorscale <- "Reds"
-      zmin <- 4
-      zmax <- 50000
       
     } else {
       agg_geom <- "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
@@ -70,9 +69,10 @@ server <- function(input, output) {
         mutate(region_name = state_name) %>%
         rename(region = state_name)
       colorscale <- "Reds"
-      zmin <- 12
-      zmax <- 550000
     }
+    
+    zmin <- min(agg$value)
+    zmax <- max(agg$value)
     
     agg <- agg %>% mutate(hover = paste(
       region_name,
@@ -84,6 +84,7 @@ server <- function(input, output) {
     
     if (input$log_scale) {
       agg <- agg %>% mutate(value = log(value, 2))
+      zmin <- log(zmin, 2)
       zmax <- log(zmax, 2)
     } else {
       zmin <- 0
