@@ -4,6 +4,14 @@ library(jsonlite)
 library(plotly)
 library(RSocrata)
 
+source("plot_helper.R")
+
+
+# define constants/settings
+log_scale_base <- 2
+default_tick_mode <- "auto"
+
+# preloads
 zipcode_ref <- read_csv("uszips.csv", col_types = cols(zip = col_integer(), county_fips = col_character()))
 
 
@@ -83,12 +91,19 @@ server <- function(input, output) {
     ))
     
     if (input$log_scale) {
-      agg <- agg %>% mutate(value = log(value, 2))
-      zmin <- log(zmin, 2)
-      zmax <- log(zmax, 2)
+      agg <- agg %>% mutate(value = log(value, log_scale_base))
+      zmin <- log(zmin, log_scale_base)
+      zmax <- log(zmax, log_scale_base)
+      tickvals <- zmin + ((zmax - zmin) * c(0, 0.2, 0.4, 0.6, 0.8, 1))
+      ticktext <- sapply(log_scale_base^tickvals, pretty_print_large_number)
+      tickmode <- "array"
     } else {
       zmin <- 0
+      tickvals <- zmin + ((zmax - zmin) * c(0, 0.2, 0.4, 0.6, 0.8, 1))
+      ticktext <- sapply(tickvals, pretty_print_large_number)
+      tickmode <- default_tick_mode
     }
+    
     
     fig <- plot_ly() 
     fig <- fig %>% add_trace(
@@ -105,15 +120,21 @@ server <- function(input, output) {
         opacity=0.5
       ),
       text=agg$hover,
-      hoverinfo = "text"
+      hoverinfo = "text",
+      colorbar=list(
+        tickmode=tickmode,
+        tickvals=tickvals,
+        ticktext=ticktext
+      )
     )
     
     fig <- fig %>% layout(
       mapbox=list(
         style="carto-positron",
         zoom =2,
-        center=list(lon= -95.71, lat=37.09))
-    )
+        center=list(lon= -95.71, lat=37.09)
+        )
+      )
     
     fig
   })
