@@ -12,7 +12,13 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      checkboxInput("agg_by_county", "Aggregate values by county instead?")
+      radioButtons("aggregation_level", 
+                   "Aggregation level:", 
+                   c("State" = "st", "County" = "cty"),
+                   selected = "st"
+                   ),
+      checkboxInput("log_scale",
+                    "Log scale the data?")
     ),
     mainPanel(
       plotlyOutput("choropleth_plot")
@@ -23,7 +29,8 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   output$choropleth_plot <- renderPlotly({
-    if (input$agg_by_county) {
+    agg_by_county <- input$aggregation_level == "cty"
+    if (agg_by_county) {
       agg_geom <- "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
       agg_key <- "id"
       zip_agg <- get_api_call(list("$select" = c("provider_zip_code","sum(total_discharges)"), 
@@ -41,6 +48,7 @@ server <- function(input, output) {
         mutate(region_name = county_name) %>%
         rename(region = county_fips)
       colorscale <- "Reds"
+      zmin <- 4
       zmax <- 50000
       
     } else {
@@ -62,7 +70,8 @@ server <- function(input, output) {
         mutate(region_name = state_name) %>%
         rename(region = state_name)
       colorscale <- "Reds"
-      zmax <- 600000
+      zmin <- 12
+      zmax <- 550000
     }
     
     agg <- agg %>% mutate(hover = paste(
@@ -73,6 +82,13 @@ server <- function(input, output) {
       prettyNum(value, big.mark = ",")
     ))
     
+    if (input$log_scale) {
+      agg <- agg %>% mutate(value = log(value, 2))
+      zmax <- log(zmax, 2)
+    } else {
+      zmin <- 0
+    }
+    
     fig <- plot_ly() 
     fig <- fig %>% add_trace(
       type="choroplethmapbox",
@@ -81,7 +97,7 @@ server <- function(input, output) {
       locations=agg$region,
       z=agg$value,
       colorscale=colorscale,
-      zmin=0,
+      zmin=zmin,
       zmax=zmax,
       marker=list(line=list(
         width=0),
