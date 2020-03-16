@@ -27,6 +27,7 @@ county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>% 
   select(-X1)
+
 drg_groups <- get_api_call(list("$select" = "distinct drg_definition"))
 
 
@@ -37,7 +38,7 @@ ui <- fluidPage(
     sidebarPanel(
       radioButtons("aggregation_level", 
                    "Aggregation level:", 
-                   c("State" = "st", "County" = "cty"),
+                   c("State" = "st", "County (slower)" = "cty"),
                    selected = "st"
                    ),
       checkboxInput("log_scale",
@@ -56,12 +57,14 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-  output$choropleth_plot <- renderPlotly({
-    agg_by_county <- input$aggregation_level == "cty"
-    
-    if (agg_by_county) {
+  agg_by_county <- reactive({    
+    input$aggregation_level == "cty"
+    })
+  
+  api_call_param <- reactive({
+    if (agg_by_county()) {
       api_call_param <- list("$select" = c("provider_zip_code","sum(total_discharges)"), 
-                                 "$group" = "provider_zip_code", "$limit" = "50000")
+                             "$group" = "provider_zip_code", "$limit" = "50000")
     } else {
       api_call_param <- list("$select" = c("provider_state","sum(total_discharges)"), 
                              "$group" = "provider_state")
@@ -72,11 +75,12 @@ server <- function(input, output) {
                                           URLencode(input$drg_group, reserved = TRUE), 
                                           "'", sep = "")
     }
-    
-    if (agg_by_county) {
-      agg_geom <- "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
-      agg_key <- "id"
-      zip_agg <- get_api_call(api_call_param)
+    api_call_param
+  })
+  
+  construct_aggregate <- reactive({
+    if (agg_by_county()) {
+      zip_agg <- get_api_call(api_call_param())
       
       agg <- zip_agg %>% 
         mutate(zip = as.integer(provider_zip_code)) %>% 
@@ -90,12 +94,11 @@ server <- function(input, output) {
         drop_na() %>%
         mutate(region_name = county_name) %>%
         rename(region = county_fips)
-      colorscale <- "Reds"
+      
+      agg
       
     } else {
-      agg_geom <- "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
-      agg_key <- "properties.name"
-      state_agg <- get_api_call(api_call_param)
+      state_agg <- get_api_call(api_call_param())
       agg <- state_agg %>% 
         rename(state_id = provider_state) %>% 
         left_join(zipcode_ref %>% 
@@ -109,10 +112,25 @@ server <- function(input, output) {
         summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>%
         mutate(region_name = state_name) %>%
         rename(region = state_name)
+      
+      agg
+    }
+  })
+  
+  output$choropleth_plot <- renderPlotly({
+    
+    if (agg_by_county()) {
+      agg_geom <- "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
+      agg_key <- "id"
+      colorscale <- "Reds"
+      
+    } else {
+      agg_geom <- "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
+      agg_key <- "properties.name"
       colorscale <- "Reds"
     }
     
-    agg <- agg %>% mutate(hover = paste(
+    agg <- construct_aggregate() %>% mutate(hover = paste(
       region_name,
       "<br />Population:",
       pretty_print_large_number(pop),
