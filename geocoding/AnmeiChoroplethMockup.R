@@ -44,24 +44,28 @@ drg_groups <-
 # user interface ====
 ui <- fluidPage(sidebarLayout(
   sidebarPanel(
+    selectInput(
+      "drg_group",
+      "Filter by DRG group",
+      c("All groups", drg_groups$drg_definition)
+    ),
     radioButtons(
       "aggregation_level",
       "Aggregation level:",
       c("State" = "st", "County (slower)" = "cty"),
       selected = "st"
     ),
+    hr(),
     checkboxInput("log_scale",
                   "Log scale the data?"),
     checkboxInput("correct_by_pop",
-                  "Correct for population?"),
-    selectInput(
-      "drg_group",
-      "Filter by DRG group",
-      c("All groups", drg_groups$drg_definition)
-    )
+                  "Correct for population?")
   ),
-  mainPanel(plotlyOutput("choropleth_plot"),
-            plotOutput("histogram_plot"))
+  mainPanel(tabsetPanel(type = "tabs", 
+                        tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
+                        tabPanel("Histogram", plotOutput("histogram_plot", height = "600px"))
+                        )
+  )
 ))
 
 # server function ====
