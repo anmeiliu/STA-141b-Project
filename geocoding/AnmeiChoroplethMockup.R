@@ -1,5 +1,6 @@
 library(shiny)
 library(tidyverse)
+library(scales)
 library(jsonlite)
 library(httr)
 library(plotly)
@@ -68,6 +69,10 @@ server <- function(input, output) {
   # reactive wrapper for aggregation level (which is used in several places)
   agg_by_county <- reactive({
     input$aggregation_level == "cty"
+  })
+  
+  log_scale <- reactive({
+    input$log_scale
   })
   
   # reactive generation for API call parameters
@@ -180,7 +185,7 @@ server <- function(input, output) {
     zmax <- max(agg$value)
     
     # rescale values by log if necessary
-    if (input$log_scale) {
+    if (log_scale()) {
       agg <- agg %>% mutate(value = log(value, log_scale_base))
       zmin <- log(zmin, log_scale_base)
       zmax <- log(zmax, log_scale_base)
@@ -229,8 +234,17 @@ server <- function(input, output) {
   })
   
   output$histogram_plot <- renderPlot({
-    ggplot(construct_aggregate(), aes(x = value)) + 
-      geom_histogram(bins = 10, color = "black", fill = "white")
+    plot <- ggplot(construct_aggregate(), aes(x = value)) + 
+      geom_histogram(bins = 10, color = "black", fill = "white") +
+      ggtitle("How many regions discharged how many patients?") +
+      xlab("Number of discharges") + 
+      ylab("Number of regions")
+    if (log_scale()) {
+      plot <- plot + scale_x_log10(labels = comma)
+    } else {
+      plot <- plot + scale_x_continuous(labels = comma)
+    }
+    plot
   })
 }
 
