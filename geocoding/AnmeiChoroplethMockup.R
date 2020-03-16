@@ -1,6 +1,7 @@
 library(shiny)
 library(tidyverse)
 library(jsonlite)
+library(httr)
 library(plotly)
 library(RSocrata)
 
@@ -13,8 +14,21 @@ tick_intervals <- c(0, 0.2, 0.4, 0.6, 0.8, 1)
 default_tick_mode <- "auto"
 
 # preloads
-zipcode_ref <- read_csv("uszips.csv", col_types = cols(zip = col_integer(), county_fips = col_character()))
+zipcode_ref <- read_csv("uszips.csv", col_types = cols(zip = col_integer(), 
+                                                       county_fips = col_character()))
+county_pop_call <- GET("https://api.census.gov/data/2018/pep/population",
+                query = list(
+                  get = "POP",
+                  `for` = "county:*",
+                  `in` = "state:*"
+                ))
+county_mat <- data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
+county_ref <- county_mat %>% 
+  unite(county_fips, c(X2, X3), sep = "") %>%
+  mutate(pop =  strtoi(X1)) %>% 
+  select(-X1)
 drg_groups <- get_api_call(list("$select" = "distinct drg_definition"))
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -29,7 +43,7 @@ ui <- fluidPage(
       checkboxInput("log_scale",
                     "Log scale the data?"),
       checkboxInput("correct_by_pop",
-                    "Correct for population? [NOT WORKING]"),
+                    "Correct for population?"),
       selectInput("drg_group", 
                   "Filter by DRG group",
                   c("All groups", drg_groups$drg_definition))
@@ -59,8 +73,6 @@ server <- function(input, output) {
                                           "'", sep = "")
     }
     
-    print(gen_api_call(api_call_param))
-    
     if (agg_by_county) {
       agg_geom <- "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
       agg_key <- "id"
@@ -70,11 +82,11 @@ server <- function(input, output) {
         mutate(zip = as.integer(provider_zip_code)) %>% 
         left_join(zipcode_ref, by = "zip") %>% 
         select(sum_total_discharges, 
-               population,
                county_fips,
                county_name) %>% 
         group_by(county_fips, county_name) %>% 
-        summarise(value = sum(as.integer(sum_total_discharges)), pop = sum(population)) %>%
+        summarise(value = sum(as.integer(sum_total_discharges))) %>%
+        left_join(county_ref, by = "county_fips") %>%
         drop_na() %>%
         mutate(region_name = county_name) %>%
         rename(region = county_fips)
@@ -108,9 +120,9 @@ server <- function(input, output) {
       pretty_print_large_number(value)
     ))
     
-    # if (input$correct_by_pop) {
-    #   agg <- agg %>% mutate(value = value/pop)
-    # }
+    if (input$correct_by_pop) {
+      agg <- agg %>% mutate(value = value/pop)
+    }
     
     zmin <- min(agg$value)
     zmax <- max(agg$value)
