@@ -59,7 +59,8 @@ ui <- fluidPage(sidebarLayout(
       c("All groups", drg_groups$drg_definition)
     )
   ),
-  mainPanel(plotlyOutput("choropleth_plot"))
+  mainPanel(plotlyOutput("choropleth_plot"),
+            plotOutput("histogram_plot"))
 ))
 
 # server function ====
@@ -185,6 +186,9 @@ server <- function(input, output) {
       zmax <- log(zmax, log_scale_base)
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
       ticktext <- pretty_print_large_number(log_scale_base ^ tickvals)
+      print(tickvals)
+      print(pretty_print_large_number(log_scale_base ^ tickvals[1:6]))
+      print(ticktext)
       tickmode <- "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
       zmin <- 0
@@ -222,6 +226,11 @@ server <- function(input, output) {
     ))
     
     fig
+  })
+  
+  output$histogram_plot <- renderPlot({
+    ggplot(construct_aggregate(), aes(x = value)) + 
+      geom_histogram(bins = 10, color = "black", fill = "white")
   })
 }
 
