@@ -16,6 +16,7 @@ pretty_print_large_number <- function(num) {
 get_suffix <- function(num) {
   num_nondec_digits <- floor(log10(num)) + 1
   ind <- floor((num_nondec_digits-1)/3)
+  ind <- ifelse(ind < 0, 0, ind)
   suff <- c("", "k", "m", "b")[ind+1]
   return(suff)
 }
