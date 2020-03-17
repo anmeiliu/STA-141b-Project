@@ -31,7 +31,7 @@ county_pop_call <-
                  `in` = "state:*")
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>%
@@ -40,6 +40,16 @@ county_ref <- county_mat %>%
 # diagnosis-related group list for selector
 drg_groups <-
   get_api_call(list("$select" = "distinct drg_definition"))
+
+# hospitals per state
+hospital_per_state <-
+  get_api_call(list(
+    "$select" = c("provider_state", "count(distinct provider_id)"),
+    "$group" = "provider_state"
+  )) %>%
+  mutate(num_hospital = strtoi(count_distinct_provider_id)) %>%
+  rename(state_id = provider_state) %>%
+  select(-count_distinct_provider_id)
 
 # user interface ====
 ui <- fluidPage(sidebarLayout(
@@ -59,13 +69,15 @@ ui <- fluidPage(sidebarLayout(
     checkboxInput("log_scale",
                   "Log scale the data?"),
     checkboxInput("correct_by_pop",
-                  "Correct for population?")
+                  "Correct for population?"),
+    checkboxInput("count_hospitals",
+                  "Display number of hospitals per region?")
   ),
-  mainPanel(tabsetPanel(type = "tabs", 
-                        tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
-                        tabPanel("Histogram", plotOutput("histogram_plot", height = "600px"))
-                        )
-  )
+  mainPanel(tabsetPanel(
+    type = "tabs",
+    tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
+    tabPanel("Histogram", plotOutput("histogram_plot", height = "600px"))
+  ))
 ))
 
 # server function ====
@@ -77,6 +89,14 @@ server <- function(input, output) {
   
   log_scale <- reactive({
     input$log_scale
+  })
+  
+  summary_vars <- reactive({
+    if (input$count_hospitals) {
+      c("sum_total_discharges", "count_distinct_provider_id")
+    } else {
+      "sum_total_discharges"
+    }
   })
   
   # reactive generation for API call parameters
@@ -106,28 +126,27 @@ server <- function(input, output) {
                                           "'",
                                           sep = "")
     }
+    
+    if (input$count_hospitals) {
+      api_call_param[["$select"]] <-
+        c(api_call_param[["$select"]], "count(distinct provider_id)")
+    }
+    
     api_call_param
   })
   
   # creates the inital aggregate dataframe
-  construct_aggregate <- reactive({
+  begin_construction <- reactive({
     if (agg_by_county()) {
       zip_agg <- get_api_call(api_call_param())
       
       agg <- zip_agg %>%
         mutate(zip = as.integer(provider_zip_code)) %>%
         left_join(zipcode_ref, by = "zip") %>%
-        select(sum_total_discharges,
-               county_fips,
-               county_name) %>%
-        group_by(county_fips, county_name) %>%
-        summarise(value = sum(as.integer(sum_total_discharges))) %>%
-        left_join(county_ref, by = "county_fips") %>%
-        drop_na() %>%
-        mutate(region_name = county_name) %>%
-        rename(region = county_fips)
-      
-      agg
+        select(c(summary_vars(),
+                 county_fips,
+                 county_name)) %>%
+        group_by(county_fips, county_name)
       
     } else {
       state_agg <- get_api_call(api_call_param())
@@ -139,16 +158,84 @@ server <- function(input, output) {
             summarize(population = sum(population)),
           by = "state_id"
         ) %>%
-        select(sum_total_discharges,
-               population,
-               state_name) %>%
-        group_by(state_name) %>%
-        summarise(value = sum(as.integer(sum_total_discharges)),
-                  pop = sum(population)) %>%
+        select(c(summary_vars(),
+                 population,
+                 state_name)) %>%
+        group_by(state_name)
+    }
+    agg
+  })
+  
+  continue_construction <- reactive({
+    agg <- begin_construction()
+    if (input$count_hospitals) {
+      if (agg_by_county()){
+      agg <- agg %>%
+        summarize(
+          value = sum(as.integer(sum_total_discharges)),
+          hospitals = sum(as.integer(count_distinct_provider_id))
+        )
+      } else {
+        agg <- agg %>%
+          summarize(
+            value = sum(as.integer(sum_total_discharges)),
+            hospitals = sum(as.integer(count_distinct_provider_id)),
+            pop = sum(population)
+          )
+      }
+    } else {
+      if (agg_by_county()) {
+      agg <- agg %>%
+        summarise(value = sum(as.integer(sum_total_discharges)))
+      } else {
+        agg <- agg %>%
+          summarise(value = sum(as.integer(sum_total_discharges)),
+                    pop = sum(population))
+      }
+      }
+    
+    agg
+  })
+  
+  construct_aggregate <- reactive({
+    agg <- continue_construction()
+    if (agg_by_county()) {
+      agg <- agg %>%
+        left_join(county_ref, by = "county_fips") %>%
+        drop_na() %>%
+        mutate(region_name = county_name) %>%
+        rename(region = county_fips)
+    } else {
+      agg <- agg %>%
         mutate(region_name = state_name) %>%
         rename(region = state_name)
-      
-      agg
+    }
+    agg
+  })
+  
+  construct_and_add_tooltip <- reactive({
+    if (input$count_hospitals) {
+      agg <- construct_aggregate() %>% mutate(
+        hover = paste(
+          region_name,
+          "<br />Population:",
+          pretty_print_large_number(pop),
+          "<br />Discharges:",
+          pretty_print_large_number(value),
+          "<br />Unique Hospitals:",
+          pretty_print_large_number(hospitals)
+        )
+      )
+    } else {
+      agg <- construct_aggregate() %>% mutate(
+        hover = paste(
+          region_name,
+          "<br />Population:",
+          pretty_print_large_number(pop),
+          "<br />Discharges:",
+          pretty_print_large_number(value)
+        )
+      )
     }
   })
   
@@ -168,16 +255,7 @@ server <- function(input, output) {
       colorscale <- "Reds"
     }
     
-    # add tooltips
-    agg <- construct_aggregate() %>% mutate(
-      hover = paste(
-        region_name,
-        "<br />Population:",
-        pretty_print_large_number(pop),
-        "<br />Discharges:",
-        pretty_print_large_number(value)
-      )
-    )
+    agg <- construct_and_add_tooltip()
     
     # correct values by population if selected
     if (input$correct_by_pop) {
@@ -194,16 +272,19 @@ server <- function(input, output) {
       zmin <- log(zmin, log_scale_base)
       zmax <- log(zmax, log_scale_base)
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
-      ticktext <- pretty_print_large_number(log_scale_base ^ tickvals)
+      ticktext <-
+        pretty_print_large_number(log_scale_base ^ tickvals)
       print(tickvals)
       print(pretty_print_large_number(log_scale_base ^ tickvals[1:6]))
       print(ticktext)
-      tickmode <- "array" # forces choropleth to use passed in tickvals/ticktext
+      tickmode <-
+        "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
       zmin <- 0
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
       ticktext <- pretty_print_large_number(tickvals)
-      tickmode <- default_tick_mode # if default is auto, tickvals/ticktext will be ignored
+      tickmode <-
+        default_tick_mode # if default is auto, tickvals/ticktext will be ignored
     }
     
     # actual plot generation
@@ -238,10 +319,12 @@ server <- function(input, output) {
   })
   
   output$histogram_plot <- renderPlot({
-    plot <- ggplot(construct_aggregate(), aes(x = value)) + 
-      geom_histogram(bins = 10, color = "black", fill = "white") +
+    plot <- ggplot(construct_aggregate(), aes(x = value)) +
+      geom_histogram(bins = 10,
+                     color = "black",
+                     fill = "white") +
       ggtitle("How many regions discharged how many patients?") +
-      xlab("Number of discharges") + 
+      xlab("Number of discharges") +
       ylab("Number of regions")
     if (log_scale()) {
       plot <- plot + scale_x_log10(labels = comma)
