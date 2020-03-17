@@ -31,7 +31,7 @@ county_pop_call <-
                  `in` = "state:*")
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>%
@@ -40,16 +40,6 @@ county_ref <- county_mat %>%
 # diagnosis-related group list for selector
 drg_groups <-
   get_api_call(list("$select" = "distinct drg_definition"))
-
-# hospitals per state
-hospital_per_state <-
-  get_api_call(list(
-    "$select" = c("provider_state", "count(distinct provider_id)"),
-    "$group" = "provider_state"
-  )) %>%
-  mutate(num_hospital = strtoi(count_distinct_provider_id)) %>%
-  rename(state_id = provider_state) %>%
-  select(-count_distinct_provider_id)
 
 # user interface ====
 ui <- fluidPage(sidebarLayout(
@@ -135,7 +125,7 @@ server <- function(input, output) {
     api_call_param
   })
   
-  # creates the inital aggregate dataframe
+  # begins creating the inital aggregate dataframe
   begin_construction <- reactive({
     if (agg_by_county()) {
       zip_agg <- get_api_call(api_call_param())
@@ -166,15 +156,14 @@ server <- function(input, output) {
     agg
   })
   
+  # summarize step must be done reactively to summarize correct vars
   continue_construction <- reactive({
     agg <- begin_construction()
     if (input$count_hospitals) {
-      if (agg_by_county()){
-      agg <- agg %>%
-        summarize(
-          value = sum(as.integer(sum_total_discharges)),
-          hospitals = sum(as.integer(count_distinct_provider_id))
-        )
+      if (agg_by_county()) {
+        agg <- agg %>%
+          summarize(value = sum(as.integer(sum_total_discharges)),
+                    hospitals = sum(as.integer(count_distinct_provider_id)))
       } else {
         agg <- agg %>%
           summarize(
@@ -185,18 +174,19 @@ server <- function(input, output) {
       }
     } else {
       if (agg_by_county()) {
-      agg <- agg %>%
-        summarise(value = sum(as.integer(sum_total_discharges)))
+        agg <- agg %>%
+          summarise(value = sum(as.integer(sum_total_discharges)))
       } else {
         agg <- agg %>%
           summarise(value = sum(as.integer(sum_total_discharges)),
                     pop = sum(population))
       }
-      }
+    }
     
     agg
   })
   
+  # this step wraps the aggregation steps and completes construction
   construct_aggregate <- reactive({
     agg <- continue_construction()
     if (agg_by_county()) {
@@ -213,6 +203,7 @@ server <- function(input, output) {
     agg
   })
   
+  # this step adds tooltips (which must be done reactively)
   construct_and_add_tooltip <- reactive({
     if (input$count_hospitals) {
       agg <- construct_aggregate() %>% mutate(
