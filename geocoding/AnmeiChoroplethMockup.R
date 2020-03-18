@@ -31,7 +31,7 @@ county_pop_call <-
                  `in` = "state:*")
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>%
@@ -41,37 +41,74 @@ county_ref <- county_mat %>%
 drg_groups <-
   get_api_call(list("$select" = "distinct drg_definition"))
 
+states <-
+  c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", 
+    "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
+    "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", 
+    "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", 
+    "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
+
+
 # user interface ====
-ui <- fluidPage(sidebarLayout(
-  sidebarPanel(
-    selectInput(
-      "drg_group",
-      "Filter by DRG group",
-      c("All groups", drg_groups$drg_definition)
-    ),
-    radioButtons(
-      "aggregation_level",
-      "Aggregation level:",
-      c("State" = "st", "County (slower)" = "cty"),
-      selected = "st"
-    ),
-    hr(),
-    checkboxInput("log_scale",
-                  "Log scale the data?"),
-    checkboxInput("correct_by_pop",
-                  "Correct for population?"),
-    checkboxInput("count_hospitals",
-                  "Display number of hospitals per region?")
-  ),
-  mainPanel(tabsetPanel(
+ui <-
+  fluidPage(tabsetPanel(
     type = "tabs",
-    tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
-    tabPanel("Histogram", plotOutput("histogram_plot", height = "600px"))
+    # nationwide tab ====
+    tabPanel(
+      "View national dataset",
+      sidebarLayout(
+        sidebarPanel(
+          selectInput(
+            "drg_group",
+            "Filter by DRG group",
+            c("All groups", drg_groups$drg_definition)
+          ),
+          radioButtons(
+            "aggregation_level",
+            "Aggregation level:",
+            c("State" = "st", "County (slower)" = "cty"),
+            selected = "st"
+          ),
+          hr(),
+          checkboxInput("log_scale",
+                        "Log scale the data?"),
+          checkboxInput("correct_by_pop",
+                        "Correct for population?"),
+          checkboxInput("count_hospitals",
+                        "Display number of hospitals per region?")
+        ),
+        mainPanel(tabsetPanel(
+          type = "tabs",
+          tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
+          tabPanel(
+            "Histogram",
+            plotOutput("histogram_plot_full", height = "600px")
+          )
+        ))
+      )
+    ),
+    # filtered tab ====
+    tabPanel("Explore the data", 
+             sidebarLayout(
+               # TODO: filters by state -> county -> specific hospital
+               # things I should be able to do:
+               # which drg is most costly at this hospital?
+               # how much does treating a specific drg cost at various hospitals?
+               # histograms of discharge # by state, county
+               # histograms of discharge # by drg?
+               sidebarPanel(
+                 selectInput("expl_drg", "Filter by DRG group", c("All groups", drg_groups$drg_definition)),
+                 selectInput("expl_state", "Filter by state", c("All states", states)),
+                 uiOutput("expl_hospital"),
+                 actionButton("submit_button", "Show selected data")), 
+               mainPanel(plotOutput("subset_plot")
+               ))
+             )
   ))
-))
 
 # server function ====
 server <- function(input, output) {
+  # nationwide data stuff ====
   # reactive wrapper for aggregation level (which is used in several places)
   agg_by_county <- reactive({
     input$aggregation_level == "cty"
@@ -309,7 +346,7 @@ server <- function(input, output) {
     fig
   })
   
-  output$histogram_plot <- renderPlot({
+  output$histogram_plot_full <- renderPlot({
     plot <- ggplot(construct_aggregate(), aes(x = value)) +
       geom_histogram(bins = 10,
                      color = "black",
@@ -324,6 +361,42 @@ server <- function(input, output) {
     }
     plot
   })
+  
+  # filtered subset stuff ====
+  
+  create_subset_plot <- reactive({
+    
+  })
+  
+  load_subset_plot <- reactive({
+    if (input$submit_button){
+      plot <- create_subset_plot()
+    }
+    plot
+  })
+  
+  fetch_eligible_hospitals <- reactive({
+    eligible <- get_api_call(list("$select" = c("distinct provider_id", "provider_name"),
+                                  "$where" = paste("provider_state='", input$expl_state, "'", sep = ""),
+                                  "$order" = "provider_name"))
+    eligible <- eligible %>% mutate(display = paste(provider_name, " (ID: ", provider_id, ")", sep = ""))
+    eligible
+  })
+  
+  eligible_hospitals <- reactive({
+    if (input$expl_state == "All states") {
+      eligible <- c()
+    } else {
+      eligible <- fetch_eligible_hospitals()$display
+    }
+    eligible
+  })
+  
+  output$expl_hospital <- renderUI({selectInput("expl_hospital", 
+                                                "Select a hospital", 
+                                                c("All hospitals", eligible_hospitals()))})
+  
+  output$subset_plot <- renderPlot({load_subset_plot()})
 }
 
 shinyApp(ui = ui, server = server)
