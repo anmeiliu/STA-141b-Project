@@ -385,16 +385,17 @@ server <- function(input, output) {
   
   eligible_hospitals <- reactive({
     if (input$expl_state == "All states") {
-      eligible <- c()
+      eligible <- "All hospitals (select a state for more options)"
     } else {
-      eligible <- fetch_eligible_hospitals()$display
+      eligible <- c("None", fetch_eligible_hospitals()$provider_id)
+      names(eligible) <- c("All hospitals", fetch_eligible_hospitals()$display)
     }
     eligible
   })
   
   output$expl_hospital <- renderUI({selectInput("expl_hospital", 
                                                 "Select a hospital", 
-                                                c("All hospitals", eligible_hospitals()))})
+                                                eligible_hospitals())})
   
   output$subset_plot <- renderPlot({load_subset_plot()})
 }
