@@ -15,6 +15,18 @@ tick_intervals <-
 default_tick_mode <-
   "auto" # default tick mode when it doesn't need to be overridden
 
+states <-
+  c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", 
+    "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
+    "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", 
+    "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", 
+    "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
+
+# for whatever reason, one of the vars appears to be mislabeled in the api
+allowable_vars <- c("total_discharges", "average_covered_charges", "average_medicare_payments")
+names(allowable_vars) <- c("Total Discharges", "Average Covered Charges", "Average Total Payments")
+
+
 # preloads ====
 # not sure what the source for this
 zipcode_ref <-
@@ -40,14 +52,6 @@ county_ref <- county_mat %>%
 # diagnosis-related group list for selector
 drg_groups <-
   get_api_call(list("$select" = "distinct drg_definition"))
-
-states <-
-  c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", 
-    "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
-    "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", 
-    "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", 
-    "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
-
 
 # user interface ====
 ui <-
@@ -100,9 +104,14 @@ ui <-
                  selectInput("expl_drg", "Filter by DRG group", c("All groups", drg_groups$drg_definition)),
                  selectInput("expl_state", "Filter by state", c("All states", states)),
                  uiOutput("expl_hospital"),
+                 selectInput("expl_var", "Variable shown", allowable_vars),
                  actionButton("submit_button", "Show selected data")), 
-               mainPanel(plotOutput("subset_plot")
-               ))
+               mainPanel(
+                 conditionalPanel("output.setempty", 
+                                  "Sorry, there is no data to display"
+                                  ),
+                 plotOutput("subset_plot"))
+               )
              )
   ))
 
@@ -339,7 +348,7 @@ server <- function(input, output) {
     
     fig <- fig %>% layout(mapbox = list(
       style = "carto-positron",
-      zoom = 2,
+      zoom = 3,
       center = list(lon = -95.71, lat = 37.09)
     ))
     
@@ -364,15 +373,16 @@ server <- function(input, output) {
   
   # filtered subset stuff ====
   
-  create_subset_plot <- reactive({
-    
+  is_drg_filtered <- reactive({
+    input$expl_drg != "All groups"
   })
   
-  load_subset_plot <- reactive({
-    if (input$submit_button){
-      plot <- create_subset_plot()
-    }
-    plot
+  is_state_filtered <- reactive({
+    input$expl_state != "All states"
+  })
+  
+  is_hospital_filtered <- reactive({
+    input$expl_hospital != "None"
   })
   
   fetch_eligible_hospitals <- reactive({
@@ -384,8 +394,9 @@ server <- function(input, output) {
   })
   
   eligible_hospitals <- reactive({
-    if (input$expl_state == "All states") {
-      eligible <- "All hospitals (select a state for more options)"
+    if (!is_state_filtered()) {
+      eligible <- c("None")
+      names(eligible) <- c("All hospitals (select a state for more options)")
     } else {
       eligible <- c("None", fetch_eligible_hospitals()$provider_id)
       names(eligible) <- c("All hospitals", fetch_eligible_hospitals()$display)
@@ -393,9 +404,74 @@ server <- function(input, output) {
     eligible
   })
   
+  select_string <- reactive({
+    select_string <- c(input$expl_var, "provider_id")
+    if (is_drg_filtered()) {
+      select_string <- c(select_string, "drg_definition")
+    }
+    if (is_state_filtered()) {
+      select_string <- c(select_string, "provider_state")
+    }
+    select_string
+  })
+  
+  loc_string <- reactive({
+    if (is_hospital_filtered()) {
+      loc_string <- paste("provider_id=", input$expl_hospital, sep = "")
+    } else if (is_state_filtered()) {
+      loc_string <- paste("provider_state=", input$expl_state, sep = "")
+    }
+    loc_string
+  })
+  
+  drg_string <- reactive({
+    drg_string <- paste("drg_definition='", URLencode(input$expl_drg, reserved = TRUE), "'", sep = "")
+  })
+  
+  where_string <- reactive({
+    where_string <- c()
+    if (is_state_filtered() | is_hospital_filtered()) {
+      where_string <- c(where_string, loc_string())
+    }
+    if (is_drg_filtered()){
+      where_string <- c(where_string, drg_string())
+    }
+    where_string <- paste(where_string, collapse = " AND ")
+    where_string
+  })
+  
+  fetch_filtered_data <- reactive({
+    api_params <- list("$select" = select_string())
+    if (is_state_filtered() | is_hospital_filtered() | is_drg_filtered()) {
+      api_params[["$where"]] = where_string()
+    }
+    get_api_call(api_params)
+  })
+  
+  filter_set_num_hospital <- reactive({
+    n_distinct(fetch_filtered_data()$provider_id)
+  })
+  
+  create_subset_plot <- reactive({
+    data <- fetch_filtered_data()
+  })
+  
+  load_subset_plot <- eventReactive(input$submit_button, {
+    plot <- create_subset_plot()
+    plot
+  })
+  
+  
   output$expl_hospital <- renderUI({selectInput("expl_hospital", 
-                                                "Select a hospital", 
+                                                "Filter by hospital", 
                                                 eligible_hospitals())})
+
+  
+  output$setempty <- reactive({
+#    filter_set_num_hospital() == 0
+    })
+  
+  outputOptions(output, "setempty", suspendWhenHidden = FALSE)
   
   output$subset_plot <- renderPlot({load_subset_plot()})
 }
