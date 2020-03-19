@@ -409,9 +409,13 @@ server <- function(input, output) {
 
   # render the histogram
   output$histogram_plot_full <- renderPlotly({
-    fig <- plot_ly(type = "histogram", x = construct_aggregate()$value)
+    fig <- plot_ly(
+      type = "histogram", 
+      x = construct_aggregate()$value, 
+      marker = list(line = list(width = 1, color = "#000"))
+      )
     fig <-
-      fig %>% layout(bargap = 0.1, title = "Discharges per region")
+      fig %>% layout(title = "Discharges per region")
     fig
   })
 
@@ -624,7 +628,8 @@ server <- function(input, output) {
         y = data$value,
         type = "bar",
         text = data$label,
-        hoverinfo = "y+text"
+        hoverinfo = "y+text",
+        marker = list(line = list(width = 1, color = "#000"))
       )
     fig <-
       fig %>% layout(
