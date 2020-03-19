@@ -125,8 +125,14 @@ ui <-
                    "output.setempty",
                    "Sorry, there is are no entries for this filter combination."
                  ),
-                 
-                 plotlyOutput("expl_plot")
+                 conditionalPanel(
+                   "output.setbare",
+                   "There is insufficient data to plot this filter combination."
+                 ),
+                 conditionalPanel(
+                   "!output.setbare",
+                   plotlyOutput("expl_plot")
+                 )
                )
              ))
   ))
@@ -609,6 +615,7 @@ server <- function(input, output) {
     req(input$submit_button)
     nrow(fetch_filtered_data()) == 1
   })
+  
   outputOptions(output, "setbare", suspendWhenHidden = FALSE)
   
   output$expl_plot <- renderPlotly({
