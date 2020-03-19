@@ -9,7 +9,7 @@ library(RSocrata)
 source("plot_helper.R")
 source("api_helper.R")
 
-readRenviron(".Renviron")
+readRenviron(".Renviron") # necessary as we make use of an API key
 
 # define constants/settings ====
 log_scale_base <- 2 # what log base to log scale data by
@@ -28,13 +28,14 @@ states <-
   )
 
 # preloads ====
-# not sure what the source for this
+# not sure what the source for this is
 zipcode_ref <-
   read_csv("uszips.csv",
            col_types = cols(zip = col_integer(),
                             county_fips = col_character()))
 
 # 2018 population data from census (2019 API not available?)
+# some cleaning is necessary before we can use it
 county_pop_call <-
   GET(
     "https://api.census.gov/data/2018/pep/population",
@@ -77,7 +78,7 @@ ui <-
           checkboxInput("log_scale",
                         "Log scale the data?"),
           checkboxInput("correct_by_pop",
-                        "Correct for population?"),
+                        "Correct for population? (displays as discharges/1000 people)"),
           checkboxInput("count_hospitals",
                         "Display number of hospitals per region?")
         ),
@@ -94,23 +95,24 @@ ui <-
     # filtered tab ====
     tabPanel("Explore the data",
              sidebarLayout(
-               # TODO: filters by state -> county -> specific hospital
-               # things I should be able to do:
-               # which drg is most costly at this hospital?
-               # how much does treating a specific drg cost at various hospitals?
-               # histograms of discharge # by state, county
-               # histograms of discharge # by drg?
                sidebarPanel(
                  selectInput(
                    "expl_drg",
                    "Filter by DRG group",
                    c("All groups", drg_groups$drg_definition)
                  ),
-                 selectInput("expl_state", "Filter by state", c("All states (slow)", states)),
+                 selectInput("expl_state", 
+                             "Filter by state", 
+                             c("All states (slow)", states)),
                  uiOutput("expl_hospital"),
                  uiOutput("expl_vars"),
                  uiOutput("expl_group"),
-                 sliderInput("show_top_n", "Number of results to show", 5, 20, value = 10),
+                 sliderInput("show_top_n", 
+                             "Number of results to show", 
+                             5, 20, value = 10),
+                 # we use conditionalPanels to prevent submissions we know are nonsensical
+                 # as filtering both hospital and DRG means there will only be one row
+                 # of data, which cannot be graphed
                  conditionalPanel(
                    "input.expl_hospital != 'None' && input.expl_drg != 'All groups'",
                    "You can't filter on both these criteria!"
@@ -121,6 +123,7 @@ ui <-
                  )
                ),
                mainPanel(
+                 # we use conditionalPanels to show error messages to the user
                  conditionalPanel(
                    "output.setempty",
                    "Sorry, there is are no entries for this filter combination."
@@ -139,8 +142,8 @@ ui <-
 
 # server function ====
 server <- function(input, output) {
-  # nationwide data stuff ====
-  # reactive wrapper for aggregation level (which is used in several places)
+  # nationwide tab ====
+  # reactive wrappers for convenience booleans
   agg_by_county <- reactive({
     input$aggregation_level == "cty"
   })
@@ -149,6 +152,7 @@ server <- function(input, output) {
     input$log_scale
   })
   
+  # reactive generation for API call parameters
   summary_vars <- reactive({
     if (input$count_hospitals) {
       c("sum_total_discharges", "count_distinct_provider_id")
@@ -157,7 +161,6 @@ server <- function(input, output) {
     }
   })
   
-  # reactive generation for API call parameters
   api_call_param <- reactive({
     if (agg_by_county()) {
       # limit forces all data to be displayed
@@ -185,6 +188,7 @@ server <- function(input, output) {
                                           sep = "")
     }
     
+    # only select count if needed
     if (input$count_hospitals) {
       api_call_param[["$select"]] <-
         c(api_call_param[["$select"]], "count(distinct provider_id)")
@@ -194,10 +198,11 @@ server <- function(input, output) {
   })
   
   # begins creating the inital aggregate dataframe
+  # cleans the data from the API and joins it to
+  # our reference data
   begin_construction <- reactive({
     if (agg_by_county()) {
       zip_agg <- get_api_call(api_call_param())
-      
       agg <- zip_agg %>%
         mutate(zip = as.integer(provider_zip_code)) %>%
         left_join(zipcode_ref, by = "zip") %>%
@@ -221,10 +226,12 @@ server <- function(input, output) {
                  state_name)) %>%
         group_by(state_name)
     }
+    
     agg
   })
   
   # summarize step must be done reactively to summarize correct vars
+  # could be simplified with a quosure?
   continue_construction <- reactive({
     agg <- begin_construction()
     if (input$count_hospitals) {
@@ -272,6 +279,7 @@ server <- function(input, output) {
   })
   
   # this step adds tooltips (which must be done reactively)
+  # done before any corrections to the graphed data
   construct_and_add_tooltip <- reactive({
     if (input$count_hospitals) {
       agg <- construct_aggregate() %>% mutate(
@@ -306,19 +314,17 @@ server <- function(input, output) {
       agg_geom <-
         "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json"
       agg_key <- "id"
-      colorscale <- "Reds"
     } else {
       agg_geom <-
         "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
       agg_key <- "properties.name"
-      colorscale <- "Reds"
     }
     
     agg <- construct_and_add_tooltip()
     
     # correct values by population if selected
     if (input$correct_by_pop) {
-      agg <- agg %>% mutate(value = value / pop)
+      agg <- agg %>% mutate(value = value / pop * 1000)
     }
     
     # find current minimum and maximum of values
@@ -351,7 +357,7 @@ server <- function(input, output) {
       featureidkey = agg_key,
       locations = agg$region,
       z = agg$value,
-      colorscale = colorscale,
+      colorscale = "Reds",
       zmin = zmin,
       zmax = zmax,
       marker = list(line = list(width = 0),
@@ -384,7 +390,7 @@ server <- function(input, output) {
   
   # filtered subset stuff ====
   
-  # boolean shorthands
+  # reactive wrappers for convenience booleans
   is_drg_filtered <- reactive({
     input$expl_drg != "All groups"
   })
