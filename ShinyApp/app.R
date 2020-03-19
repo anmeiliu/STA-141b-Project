@@ -374,6 +374,7 @@ server <- function(input, output) {
     fig
   })
   
+  # render the histogram
   output$histogram_plot_full <- renderPlotly({
     fig <- plot_ly(type = "histogram", x = construct_aggregate()$value)
     fig <-
@@ -383,6 +384,7 @@ server <- function(input, output) {
   
   # filtered subset stuff ====
   
+  # boolean shorthands
   is_drg_filtered <- reactive({
     input$expl_drg != "All groups"
   })
@@ -395,6 +397,7 @@ server <- function(input, output) {
     input$expl_hospital != "None"
   })
   
+  # generators for quosures based on option selections
   grouping_var <- reactive({
     if (input$expl_group == "DRG") {
       quo(drg_definition)
@@ -411,6 +414,7 @@ server <- function(input, output) {
     }
   })
   
+  # generators for option selections
   fetch_eligible_hospitals <- reactive({
     eligible <-
       get_api_call(list(
@@ -471,6 +475,7 @@ server <- function(input, output) {
     eligible
   })
   
+  # api query generators
   select_string <- reactive({
     select_string <-
       c(input$expl_vars,
@@ -513,6 +518,7 @@ server <- function(input, output) {
     where_string
   })
   
+  # constructs api query and fetches data
   fetch_filtered_data <- reactive({
     api_params <- list("$select" = select_string())
     if (is_state_filtered() |
@@ -523,10 +529,7 @@ server <- function(input, output) {
     data
   })
   
-  filter_set_num_hospital <- reactive({
-    n_distinct(fetch_filtered_data()$provider_id)
-  })
-  
+  # plot generation
   create_subset_plot <- reactive({
     data <- fetch_filtered_data()
     data <- data %>% rename(value = 1) %>%
@@ -577,18 +580,19 @@ server <- function(input, output) {
     fig
   })
   
+  # delays plot generation until button is pressed
   load_subset_plot <- eventReactive(input$submit_button, {
     plot <- create_subset_plot()
     plot
   })
   
+  # dynamic selection outputs
   output$expl_hospital <- renderUI({
     selectInput("expl_hospital",
                 "Filter by hospital",
                 eligible_hospitals())
   })
   outputOptions(output, "expl_hospital", suspendWhenHidden = FALSE)
-  
   
   output$expl_vars <- renderUI({
     selectInput("expl_vars",
@@ -597,7 +601,6 @@ server <- function(input, output) {
   })
   outputOptions(output, "expl_vars", suspendWhenHidden = FALSE)
   
-  
   output$expl_group <- renderUI({
     selectInput("expl_group",
                 "Group variables by",
@@ -605,9 +608,10 @@ server <- function(input, output) {
   })
   outputOptions(output, "expl_group", suspendWhenHidden = FALSE)
   
+  # outputs used to alter display conditionally
   output$setempty <- reactive({
     req(input$submit_button)
-    filter_set_num_hospital() == 0
+    n_distinct(fetch_filtered_data()$provider_id) == 0
   })
   outputOptions(output, "setempty", suspendWhenHidden = FALSE)
   
@@ -615,9 +619,9 @@ server <- function(input, output) {
     req(input$submit_button)
     nrow(fetch_filtered_data()) == 1
   })
-  
   outputOptions(output, "setbare", suspendWhenHidden = FALSE)
   
+  # plot output
   output$expl_plot <- renderPlotly({
     load_subset_plot()
   })
