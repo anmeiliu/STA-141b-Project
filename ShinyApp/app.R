@@ -19,7 +19,7 @@ default_tick_mode <-
   "auto" # default tick mode when it doesn't need to be overridden
 
 states <-
-  c(
+  c(    
     "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA",
     "HI","IA","ID","IL","IN","KS","KY","LA","MA","MD",
     "ME","MI","MN","MO","MS","MT","NC","ND","NE","NH",
@@ -43,7 +43,7 @@ county_pop_call <-
                  `in` = "state:*")
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>%
@@ -111,17 +111,21 @@ ui <-
                  uiOutput("expl_vars"),
                  uiOutput("expl_group"),
                  sliderInput("show_top_n", "Number of results to show", 5, 20, value = 10),
-                 conditionalPanel("input.expl_hospital != 'None' && input.expl_drg != 'All groups'", 
-                                  "You can't filter on both these criteria!"),
-                 conditionalPanel("input.expl_hospital == 'None' || input.expl_drg == 'All groups'", 
-                                  actionButton("submit_button", "Show selected data"))
+                 conditionalPanel(
+                   "input.expl_hospital != 'None' && input.expl_drg != 'All groups'",
+                   "You can't filter on both these criteria!"
+                 ),
+                 conditionalPanel(
+                   "input.expl_hospital == 'None' || input.expl_drg == 'All groups'",
+                   actionButton("submit_button", "Show selected data")
+                 )
                ),
                mainPanel(
                  conditionalPanel(
                    "output.setempty",
                    "Sorry, there is are no entries for this filter combination."
                  ),
-
+                 
                  plotlyOutput("expl_plot")
                )
              ))
@@ -323,8 +327,8 @@ server <- function(input, output) {
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
       ticktext <-
         pretty_print_large_number(log_scale_base ^ tickvals)
-      tickmode <- 
-      "array" # forces choropleth to use passed in tickvals/ticktext
+      tickmode <-
+        "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
       zmin <- 0
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
@@ -366,7 +370,8 @@ server <- function(input, output) {
   
   output$histogram_plot_full <- renderPlotly({
     fig <- plot_ly(type = "histogram", x = construct_aggregate()$value)
-    fig <- fig %>% layout(bargap = 0.1, title = "Discharges per region")
+    fig <-
+      fig %>% layout(bargap = 0.1, title = "Discharges per region")
     fig
   })
   
@@ -397,7 +402,8 @@ server <- function(input, output) {
       quo(drg_definition)
     } else if (input$expl_group == "Hospital") {
       quo(provider_name)
-    }  })
+    }
+  })
   
   fetch_eligible_hospitals <- reactive({
     eligible <-
@@ -456,11 +462,8 @@ server <- function(input, output) {
       names(eligible) <-
         c("DRG (deselect hospital for more options)")
     }
-    print(eligible)
     eligible
   })
-  
-  
   
   select_string <- reactive({
     select_string <-
@@ -526,7 +529,6 @@ server <- function(input, output) {
       summarize(value = sum(value),
                 label = first(!!label_var())) %>%
       arrange(desc(value))
-    print(head(data))
     here_n <- min(c(nrow(data), input$show_top_n))
     data2 <- data %>%
       top_n(here_n, value) %>%
@@ -545,7 +547,6 @@ server <- function(input, output) {
     } else {
       data <- data2
     }
-    
     if (input$expl_vars == "total_discharges") {
       selvar <- "Total Discharges"
     } else if (input$expl_vars == "average_covered_charges") {
@@ -553,7 +554,6 @@ server <- function(input, output) {
     } else if (input$expl_vars == "average_medicare_payments") {
       selvar <- "Average Total Payments"
     }
-    
     fig <-
       plot_ly(
         data,
@@ -576,13 +576,11 @@ server <- function(input, output) {
     plot
   })
   
-  
   output$expl_hospital <- renderUI({
     selectInput("expl_hospital",
                 "Filter by hospital",
                 eligible_hospitals())
   })
-  
   outputOptions(output, "expl_hospital", suspendWhenHidden = FALSE)
   
   
@@ -591,7 +589,6 @@ server <- function(input, output) {
                 "Display variable",
                 eligible_vars())
   })
-  
   outputOptions(output, "expl_vars", suspendWhenHidden = FALSE)
   
   
@@ -600,7 +597,6 @@ server <- function(input, output) {
                 "Group variables by",
                 eligible_group())
   })
-  
   outputOptions(output, "expl_group", suspendWhenHidden = FALSE)
   
   output$setempty <- reactive({
@@ -614,8 +610,6 @@ server <- function(input, output) {
     nrow(fetch_filtered_data()) == 1
   })
   outputOptions(output, "setbare", suspendWhenHidden = FALSE)
-  
-  
   
   output$expl_plot <- renderPlotly({
     load_subset_plot()
