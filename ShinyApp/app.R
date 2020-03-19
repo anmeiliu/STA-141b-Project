@@ -396,12 +396,19 @@ server <- function(input, output) {
   })
   
   grouping_var <- reactive({
-    quo(drg_definition)
+    if (input$expl_group == "DRG") {
+      quo(drg_definition)
+    } else if (input$expl_group == "Hospital") {
+      quo(provider_id)
+    }
   })
   
   label_var <- reactive({
-    quo(drg_definition)
-  })
+    if (input$expl_group == "DRG") {
+      quo(drg_definition)
+    } else if (input$expl_group == "Hospital") {
+      quo(provider_name)
+    }  })
   
   fetch_eligible_hospitals <- reactive({
     eligible <-
@@ -530,9 +537,11 @@ server <- function(input, output) {
       summarize(value = sum(value),
                 label = first(!!label_var())) %>%
       arrange(desc(value))
+    print(head(data))
+    here_n <- min(c(nrow(data), show_top_n))
     data2 <- data %>%
-      top_n(show_top_n, value) %>%
-      mutate(order_val = c(1:show_top_n))
+      top_n(here_n, value) %>%
+      mutate(order_val = c(1:here_n))
     if (nrow(data) > show_top_n) {
       misctotal <-
         sum(data %>% filter(row_number() > show_top_n) %>% pull(value))
@@ -557,7 +566,7 @@ server <- function(input, output) {
     fig <-
       fig %>% layout(
         xaxis = list(showticklabels = FALSE),
-        title = paste("Top ", show_top_n, " ", input$expl_group, "s by Selected Variable", sep = "")
+        title = paste("Top ", here_n, " ", input$expl_group, "s by Selected Variable", sep = "")
       )
     fig
   })
