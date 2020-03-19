@@ -404,10 +404,7 @@ server <- function(input, output) {
   })
   
   select_string <- reactive({
-    select_string <- c(input$expl_var, "provider_id")
-    if (is_drg_filtered()) {
-      select_string <- c(select_string, "drg_definition")
-    }
+    select_string <- c(input$expl_var, "provider_id", "drg_definition")
     if (is_state_filtered()) {
       select_string <- c(select_string, "provider_state")
     }
@@ -418,7 +415,7 @@ server <- function(input, output) {
     if (is_hospital_filtered()) {
       loc_string <- paste("provider_id=", input$expl_hospital, sep = "")
     } else if (is_state_filtered()) {
-      loc_string <- paste("provider_state=", input$expl_state, sep = "")
+      loc_string <- paste("provider_state='", input$expl_state, "'", sep = "")
     }
     loc_string
   })
@@ -471,10 +468,11 @@ server <- function(input, output) {
 
   
   output$setempty <- reactive({
+    req(input$submit_button)
     filter_set_num_hospital() == 0
     })
   
-#  outputOptions(output, "setempty", suspendWhenHidden = FALSE)
+  outputOptions(output, "setempty", suspendWhenHidden = FALSE)
   
   output$subset_plot <- renderPlot({load_subset_plot()})
 }
