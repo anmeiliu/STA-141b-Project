@@ -28,7 +28,8 @@ states <-
   )
 
 # preloads ====
-# not sure what the source for this is
+# (c) simplemaps.com, used under CC BY 4.0, not modified
+# https://creativecommons.org/licenses/by/4.0/
 zipcode_ref <-
   read_csv("uszips.csv",
     col_types = cols(
