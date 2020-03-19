@@ -404,6 +404,7 @@ server <- function(input, output) {
   })
   
   # generators for quosures based on option selections
+  # used for dplyr-based dynamic grouping/labeling
   grouping_var <- reactive({
     if (input$expl_group == "DRG") {
       quo(drg_definition)
@@ -447,6 +448,8 @@ server <- function(input, output) {
   })
   
   eligible_vars <- reactive({
+    # statistics other than total discharges are only meaningful
+    # within the same DRG group
     if (!is_drg_filtered()) {
       eligible <- c("total_discharges")
       names(eligible) <-
@@ -466,6 +469,7 @@ server <- function(input, output) {
   
   eligible_group <- reactive({
     req(input$expl_drg, input$expl_hospital)
+    # only groups not being filtered on are eligible
     if (!is_drg_filtered() & !is_hospital_filtered()) {
       eligible <- c("DRG", "Hospital")
     } else if (is_drg_filtered()) {
@@ -481,7 +485,7 @@ server <- function(input, output) {
     eligible
   })
   
-  # api query generators
+  # API query generators
   select_string <- reactive({
     select_string <-
       c(input$expl_vars,
@@ -524,7 +528,7 @@ server <- function(input, output) {
     where_string
   })
   
-  # constructs api query and fetches data
+  # constructs API query and fetches data
   fetch_filtered_data <- reactive({
     api_params <- list("$select" = select_string())
     if (is_state_filtered() |
@@ -548,6 +552,8 @@ server <- function(input, output) {
     data2 <- data %>%
       top_n(here_n, value) %>%
       mutate(order_val = c(1:here_n))
+    
+    # compile non-top values and bind as an additional row
     if (nrow(data) > input$show_top_n) {
       misctotal <-
         sum(data %>% filter(row_number() > input$show_top_n) %>% pull(value))
@@ -562,6 +568,8 @@ server <- function(input, output) {
     } else {
       data <- data2
     }
+    
+    # used for title generation
     if (input$expl_vars == "total_discharges") {
       selvar <- "Total Discharges"
     } else if (input$expl_vars == "average_covered_charges") {
@@ -569,6 +577,7 @@ server <- function(input, output) {
     } else if (input$expl_vars == "average_medicare_payments") {
       selvar <- "Average Total Payments"
     }
+    
     fig <-
       plot_ly(
         data,
