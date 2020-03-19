@@ -86,7 +86,7 @@ ui <-
           tabPanel("Map", plotlyOutput("choropleth_plot", height = "600px")),
           tabPanel(
             "Histogram",
-            plotOutput("histogram_plot_full", height = "600px")
+            plotlyOutput("histogram_plot_full", height = "600px")
           )
         ))
       )
@@ -364,20 +364,10 @@ server <- function(input, output) {
     fig
   })
   
-  output$histogram_plot_full <- renderPlot({
-    plot <- ggplot(construct_aggregate(), aes(x = value)) +
-      geom_histogram(bins = 10,
-                     color = "black",
-                     fill = "white") +
-      ggtitle("How many regions discharged how many patients?") +
-      xlab("Number of discharges") +
-      ylab("Number of regions")
-    if (log_scale()) {
-      plot <- plot + scale_x_log10(labels = comma)
-    } else {
-      plot <- plot + scale_x_continuous(labels = comma)
-    }
-    plot
+  output$histogram_plot_full <- renderPlotly({
+    fig <- plot_ly(type = "histogram", x = construct_aggregate()$value)
+    fig <- fig %>% layout(bargap = 0.1, title = "Discharges per region")
+    fig
   })
   
   # filtered subset stuff ====
@@ -387,7 +377,7 @@ server <- function(input, output) {
   })
   
   is_state_filtered <- reactive({
-    input$expl_state != "All states"
+    input$expl_state != "All states (slow)"
   })
   
   is_hospital_filtered <- reactive({
