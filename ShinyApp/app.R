@@ -19,35 +19,40 @@ default_tick_mode <-
   "auto" # default tick mode when it doesn't need to be overridden
 
 states <-
-  c(    
-    "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA",
-    "HI","IA","ID","IL","IN","KS","KY","LA","MA","MD",
-    "ME","MI","MN","MO","MS","MT","NC","ND","NE","NH",
-    "NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC",
-    "SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"
+  c(
+    "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
+    "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD",
+    "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH",
+    "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"
   )
 
 # preloads ====
 # not sure what the source for this is
 zipcode_ref <-
   read_csv("uszips.csv",
-           col_types = cols(zip = col_integer(),
-                            county_fips = col_character()))
+    col_types = cols(
+      zip = col_integer(),
+      county_fips = col_character()
+    )
+  )
 
 # 2018 population data from census (2019 API not available?)
 # some cleaning is necessary before we can use it
 county_pop_call <-
   GET(
     "https://api.census.gov/data/2018/pep/population",
-    query = list(get = "POP",
-                 `for` = "county:*",
-                 `in` = "state:*")
+    query = list(
+      get = "POP",
+      `for` = "county:*",
+      `in` = "state:*"
+    )
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
-  mutate(pop =  strtoi(X1)) %>%
+  mutate(pop = strtoi(X1)) %>%
   select(-X1)
 
 # diagnosis-related group list for selector
@@ -75,12 +80,18 @@ ui <-
             selected = "st"
           ),
           hr(),
-          checkboxInput("log_scale",
-                        "Log scale the data?"),
-          checkboxInput("correct_by_pop",
-                        "Correct for population? (displays as discharges/1000 people)"),
-          checkboxInput("count_hospitals",
-                        "Display number of hospitals per region?")
+          checkboxInput(
+            "log_scale",
+            "Log scale the data?"
+          ),
+          checkboxInput(
+            "correct_by_pop",
+            "Correct for population? (displays as discharges/1000 people)"
+          ),
+          checkboxInput(
+            "count_hospitals",
+            "Display number of hospitals per region?"
+          )
         ),
         mainPanel(tabsetPanel(
           type = "tabs",
@@ -93,51 +104,57 @@ ui <-
       )
     ),
     # filtered tab ====
-    tabPanel("Explore the data",
-             sidebarLayout(
-               sidebarPanel(
-                 selectInput(
-                   "expl_drg",
-                   "Filter by DRG group",
-                   c("All groups", drg_groups$drg_definition)
-                 ),
-                 selectInput("expl_state", 
-                             "Filter by state", 
-                             c("All states (slow)", states)),
-                 uiOutput("expl_hospital"),
-                 uiOutput("expl_vars"),
-                 uiOutput("expl_group"),
-                 sliderInput("show_top_n", 
-                             "Number of results to show", 
-                             5, 20, value = 10),
-                 # we use conditionalPanels to prevent submissions we know are nonsensical
-                 # as filtering both hospital and DRG means there will only be one row
-                 # of data, which cannot be graphed
-                 conditionalPanel(
-                   "input.expl_hospital != 'None' && input.expl_drg != 'All groups'",
-                   "You can't filter on both these criteria!"
-                 ),
-                 conditionalPanel(
-                   "input.expl_hospital == 'None' || input.expl_drg == 'All groups'",
-                   actionButton("submit_button", "Show selected data")
-                 )
-               ),
-               mainPanel(
-                 # we use conditionalPanels to show error messages to the user
-                 conditionalPanel(
-                   "output.setempty",
-                   "Sorry, there is are no entries for this filter combination."
-                 ),
-                 conditionalPanel(
-                   "output.setbare",
-                   "There is insufficient data to plot this filter combination."
-                 ),
-                 conditionalPanel(
-                   "!output.setbare",
-                   plotlyOutput("expl_plot")
-                 )
-               )
-             ))
+    tabPanel(
+      "Explore the data",
+      sidebarLayout(
+        sidebarPanel(
+          selectInput(
+            "expl_drg",
+            "Filter by DRG group",
+            c("All groups", drg_groups$drg_definition)
+          ),
+          selectInput(
+            "expl_state",
+            "Filter by state",
+            c("All states (slow)", states)
+          ),
+          uiOutput("expl_hospital"),
+          uiOutput("expl_vars"),
+          uiOutput("expl_group"),
+          sliderInput("show_top_n",
+            "Number of results to show",
+            5, 20,
+            value = 10
+          ),
+          # we use conditionalPanels to prevent submissions we know are nonsensical
+          # as filtering both hospital and DRG means there will only be one row
+          # of data, which cannot be graphed
+          conditionalPanel(
+            "input.expl_hospital != 'None' && input.expl_drg != 'All groups'",
+            "You can't filter on both these criteria!"
+          ),
+          conditionalPanel(
+            "input.expl_hospital == 'None' || input.expl_drg == 'All groups'",
+            actionButton("submit_button", "Show selected data")
+          )
+        ),
+        mainPanel(
+          # we use conditionalPanels to show error messages to the user
+          conditionalPanel(
+            "output.setempty",
+            "Sorry, there is are no entries for this filter combination."
+          ),
+          conditionalPanel(
+            "output.setbare",
+            "There is insufficient data to plot this filter combination."
+          ),
+          conditionalPanel(
+            "!output.setbare",
+            plotlyOutput("expl_plot")
+          )
+        )
+      )
+    )
   ))
 
 # server function ====
@@ -147,11 +164,11 @@ server <- function(input, output) {
   agg_by_county <- reactive({
     input$aggregation_level == "cty"
   })
-  
+
   log_scale <- reactive({
     input$log_scale
   })
-  
+
   # reactive generation for API call parameters
   summary_vars <- reactive({
     if (input$count_hospitals) {
@@ -160,7 +177,7 @@ server <- function(input, output) {
       "sum_total_discharges"
     }
   })
-  
+
   api_call_param <- reactive({
     if (agg_by_county()) {
       # limit forces all data to be displayed
@@ -177,26 +194,27 @@ server <- function(input, output) {
           "$group" = "provider_state"
         )
     }
-    
+
     # filter by DRG if option is selected
     # all DRGs contain spaces so must be passed as string literals
     # some DRGs contain ampersands so must be URL encoded
     if (input$drg_group != "All groups") {
       api_call_param[["$where"]] <- paste("drg_definition='",
-                                          URLencode(input$drg_group, reserved = TRUE),
-                                          "'",
-                                          sep = "")
+        URLencode(input$drg_group, reserved = TRUE),
+        "'",
+        sep = ""
+      )
     }
-    
+
     # only select count if needed
     if (input$count_hospitals) {
       api_call_param[["$select"]] <-
         c(api_call_param[["$select"]], "count(distinct provider_id)")
     }
-    
+
     api_call_param
   })
-  
+
   # begins creating the inital aggregate dataframe
   # cleans the data from the API and joins it to
   # our reference data
@@ -206,11 +224,12 @@ server <- function(input, output) {
       agg <- zip_agg %>%
         mutate(zip = as.integer(provider_zip_code)) %>%
         left_join(zipcode_ref, by = "zip") %>%
-        select(c(summary_vars(),
-                 county_fips,
-                 county_name)) %>%
+        select(c(
+          summary_vars(),
+          county_fips,
+          county_name
+        )) %>%
         group_by(county_fips, county_name)
-      
     } else {
       state_agg <- get_api_call(api_call_param())
       agg <- state_agg %>%
@@ -221,15 +240,17 @@ server <- function(input, output) {
             summarize(population = sum(population)),
           by = "state_id"
         ) %>%
-        select(c(summary_vars(),
-                 population,
-                 state_name)) %>%
+        select(c(
+          summary_vars(),
+          population,
+          state_name
+        )) %>%
         group_by(state_name)
     }
-    
+
     agg
   })
-  
+
   # summarize step must be done reactively to summarize correct vars
   # could be simplified with a quosure?
   continue_construction <- reactive({
@@ -237,8 +258,10 @@ server <- function(input, output) {
     if (input$count_hospitals) {
       if (agg_by_county()) {
         agg <- agg %>%
-          summarize(value = sum(as.integer(sum_total_discharges)),
-                    hospitals = sum(as.integer(count_distinct_provider_id)))
+          summarize(
+            value = sum(as.integer(sum_total_discharges)),
+            hospitals = sum(as.integer(count_distinct_provider_id))
+          )
       } else {
         agg <- agg %>%
           summarize(
@@ -253,14 +276,16 @@ server <- function(input, output) {
           summarise(value = sum(as.integer(sum_total_discharges)))
       } else {
         agg <- agg %>%
-          summarise(value = sum(as.integer(sum_total_discharges)),
-                    pop = sum(population))
+          summarise(
+            value = sum(as.integer(sum_total_discharges)),
+            pop = sum(population)
+          )
       }
     }
-    
+
     agg
   })
-  
+
   # this step wraps the aggregation steps and completes construction
   construct_aggregate <- reactive({
     agg <- continue_construction()
@@ -277,7 +302,7 @@ server <- function(input, output) {
     }
     agg
   })
-  
+
   # this step adds tooltips (which must be done reactively)
   # done before any corrections to the graphed data
   construct_and_add_tooltip <- reactive({
@@ -305,7 +330,7 @@ server <- function(input, output) {
       )
     }
   })
-  
+
   # plot the choropleth
   output$choropleth_plot <- renderPlotly({
     # set aggregation-level specific display options
@@ -319,18 +344,18 @@ server <- function(input, output) {
         "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
       agg_key <- "properties.name"
     }
-    
+
     agg <- construct_and_add_tooltip()
-    
+
     # correct values by population if selected
     if (input$correct_by_pop) {
       agg <- agg %>% mutate(value = value / pop * 1000)
     }
-    
+
     # find current minimum and maximum of values
     zmin <- min(agg$value)
     zmax <- max(agg$value)
-    
+
     # rescale values by log if necessary
     if (log_scale()) {
       agg <- agg %>% mutate(value = log(value, log_scale_base))
@@ -338,7 +363,7 @@ server <- function(input, output) {
       zmax <- log(zmax, log_scale_base)
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
       ticktext <-
-        pretty_print_large_number(log_scale_base ^ tickvals)
+        pretty_print_large_number(log_scale_base^tickvals)
       tickmode <-
         "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
@@ -348,7 +373,7 @@ server <- function(input, output) {
       tickmode <-
         default_tick_mode # if default is auto, tickvals/ticktext will be ignored
     }
-    
+
     # actual plot generation
     fig <- plot_ly()
     fig <- fig %>% add_trace(
@@ -360,8 +385,10 @@ server <- function(input, output) {
       colorscale = "Reds",
       zmin = zmin,
       zmax = zmax,
-      marker = list(line = list(width = 0),
-                    opacity = 0.5),
+      marker = list(
+        line = list(width = 0),
+        opacity = 0.5
+      ),
       text = agg$hover,
       hoverinfo = "text",
       colorbar = list(
@@ -370,16 +397,16 @@ server <- function(input, output) {
         ticktext = ticktext
       )
     )
-    
+
     fig <- fig %>% layout(mapbox = list(
       style = "carto-positron",
       zoom = 3,
       center = list(lon = -95.71, lat = 37.09)
     ))
-    
+
     fig
   })
-  
+
   # render the histogram
   output$histogram_plot_full <- renderPlotly({
     fig <- plot_ly(type = "histogram", x = construct_aggregate()$value)
@@ -387,22 +414,22 @@ server <- function(input, output) {
       fig %>% layout(bargap = 0.1, title = "Discharges per region")
     fig
   })
-  
+
   # filtered subset stuff ====
-  
+
   # reactive wrappers for convenience booleans
   is_drg_filtered <- reactive({
     input$expl_drg != "All groups"
   })
-  
+
   is_state_filtered <- reactive({
     input$expl_state != "All states (slow)"
   })
-  
+
   is_hospital_filtered <- reactive({
     input$expl_hospital != "None"
   })
-  
+
   # generators for quosures based on option selections
   # used for dplyr-based dynamic grouping/labeling
   grouping_var <- reactive({
@@ -412,7 +439,7 @@ server <- function(input, output) {
       quo(provider_id)
     }
   })
-  
+
   label_var <- reactive({
     if (input$expl_group == "DRG") {
       quo(drg_definition)
@@ -420,7 +447,7 @@ server <- function(input, output) {
       quo(provider_name)
     }
   })
-  
+
   # generators for option selections
   fetch_eligible_hospitals <- reactive({
     eligible <-
@@ -433,7 +460,7 @@ server <- function(input, output) {
       eligible %>% mutate(display = paste(provider_name, " (ID: ", provider_id, ")", sep = ""))
     eligible
   })
-  
+
   eligible_hospitals <- reactive({
     if (!is_state_filtered()) {
       eligible <- c("None")
@@ -446,7 +473,7 @@ server <- function(input, output) {
     }
     eligible
   })
-  
+
   eligible_vars <- reactive({
     # statistics other than total discharges are only meaningful
     # within the same DRG group
@@ -456,17 +483,21 @@ server <- function(input, output) {
         c("Total Discharges (select a DRG group for more options)")
     } else {
       eligible <-
-        c("total_discharges",
+        c(
+          "total_discharges",
           "average_covered_charges",
-          "average_medicare_payments")
+          "average_medicare_payments"
+        )
       names(eligible) <-
-        c("Total Discharges",
+        c(
+          "Total Discharges",
           "Average Covered Charges",
-          "Average Total Payments")
+          "Average Total Payments"
+        )
     }
     eligible
   })
-  
+
   eligible_group <- reactive({
     req(input$expl_drg, input$expl_hospital)
     # only groups not being filtered on are eligible
@@ -484,20 +515,22 @@ server <- function(input, output) {
     }
     eligible
   })
-  
+
   # API query generators
   select_string <- reactive({
     select_string <-
-      c(input$expl_vars,
+      c(
+        input$expl_vars,
         "provider_id",
         "provider_name",
-        "drg_definition")
+        "drg_definition"
+      )
     if (is_state_filtered()) {
       select_string <- c(select_string, "provider_state")
     }
     select_string
   })
-  
+
   loc_string <- reactive({
     if (is_hospital_filtered()) {
       loc_string <- paste("provider_id=", input$expl_hospital, sep = "")
@@ -507,15 +540,16 @@ server <- function(input, output) {
     }
     loc_string
   })
-  
+
   drg_string <- reactive({
     drg_string <-
       paste("drg_definition='",
-            URLencode(input$expl_drg, reserved = TRUE),
-            "'",
-            sep = "")
+        URLencode(input$expl_drg, reserved = TRUE),
+        "'",
+        sep = ""
+      )
   })
-  
+
   where_string <- reactive({
     where_string <- c()
     if (is_state_filtered() | is_hospital_filtered()) {
@@ -527,48 +561,53 @@ server <- function(input, output) {
     where_string <- paste(where_string, collapse = " AND ")
     where_string
   })
-  
+
   # constructs API query and fetches data
   fetch_filtered_data <- reactive({
     api_params <- list("$select" = select_string())
     if (is_state_filtered() |
-        is_hospital_filtered() | is_drg_filtered()) {
-      api_params[["$where"]] = where_string()
+      is_hospital_filtered() | is_drg_filtered()) {
+      api_params[["$where"]] <- where_string()
     }
     data <- get_api_call(api_params)
     data
   })
-  
+
   # plot generation
   create_subset_plot <- reactive({
     data <- fetch_filtered_data()
-    data <- data %>% rename(value = 1) %>%
+    data <- data %>%
+      rename(value = 1) %>%
       mutate(value = as.numeric(value)) %>%
       group_by(!!grouping_var()) %>%
-      summarize(value = sum(value),
-                label = first(!!label_var())) %>%
+      summarize(
+        value = sum(value),
+        label = first(!!label_var())
+      ) %>%
       arrange(desc(value))
     here_n <- min(c(nrow(data), input$show_top_n))
     data2 <- data %>%
       top_n(here_n, value) %>%
       mutate(order_val = c(1:here_n))
-    
+
     # compile non-top values and bind as an additional row
     if (nrow(data) > input$show_top_n) {
       misctotal <-
         sum(data %>% filter(row_number() > input$show_top_n) %>% pull(value))
       nmisc <-
         nrow(data %>% filter(row_number() > input$show_top_n))
-      data <- bind_rows(data2,
-                        tibble(
-                          value = misctotal,
-                          label = paste("Other (", nmisc, ")", sep = ""),
-                          order_val = input$show_top_n + 1
-                        ))
+      data <- bind_rows(
+        data2,
+        tibble(
+          value = misctotal,
+          label = paste("Other (", nmisc, ")", sep = ""),
+          order_val = input$show_top_n + 1
+        )
+      )
     } else {
       data <- data2
     }
-    
+
     # used for title generation
     if (input$expl_vars == "total_discharges") {
       selvar <- "Total Discharges"
@@ -577,7 +616,7 @@ server <- function(input, output) {
     } else if (input$expl_vars == "average_medicare_payments") {
       selvar <- "Average Total Payments"
     }
-    
+
     fig <-
       plot_ly(
         data,
@@ -594,48 +633,54 @@ server <- function(input, output) {
       )
     fig
   })
-  
+
   # delays plot generation until button is pressed
   load_subset_plot <- eventReactive(input$submit_button, {
     plot <- create_subset_plot()
     plot
   })
-  
+
   # dynamic selection outputs
   output$expl_hospital <- renderUI({
-    selectInput("expl_hospital",
-                "Filter by hospital",
-                eligible_hospitals())
+    selectInput(
+      "expl_hospital",
+      "Filter by hospital",
+      eligible_hospitals()
+    )
   })
   outputOptions(output, "expl_hospital", suspendWhenHidden = FALSE)
-  
+
   output$expl_vars <- renderUI({
-    selectInput("expl_vars",
-                "Display variable",
-                eligible_vars())
+    selectInput(
+      "expl_vars",
+      "Display variable",
+      eligible_vars()
+    )
   })
   outputOptions(output, "expl_vars", suspendWhenHidden = FALSE)
-  
+
   output$expl_group <- renderUI({
-    selectInput("expl_group",
-                "Group variables by",
-                eligible_group())
+    selectInput(
+      "expl_group",
+      "Group variables by",
+      eligible_group()
+    )
   })
   outputOptions(output, "expl_group", suspendWhenHidden = FALSE)
-  
+
   # outputs used to alter display conditionally
   output$setempty <- reactive({
     req(input$submit_button)
     n_distinct(fetch_filtered_data()$provider_id) == 0
   })
   outputOptions(output, "setempty", suspendWhenHidden = FALSE)
-  
+
   output$setbare <- reactive({
     req(input$submit_button)
     nrow(fetch_filtered_data()) == 1
   })
   outputOptions(output, "setbare", suspendWhenHidden = FALSE)
-  
+
   # plot output
   output$expl_plot <- renderPlotly({
     load_subset_plot()
