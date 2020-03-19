@@ -313,7 +313,7 @@ server <- function(input, output) {
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
       ticktext <-
         pretty_print_large_number(log_scale_base ^ tickvals)
-      tickmode <-
+      tickmode <- array
         "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
       zmin <- 0
