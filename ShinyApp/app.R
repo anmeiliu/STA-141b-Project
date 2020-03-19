@@ -17,18 +17,16 @@ tick_intervals <-
   c(0, 0.2, 0.4, 0.6, 0.8, 1) # where to place ticks on the scale
 default_tick_mode <-
   "auto" # default tick mode when it doesn't need to be overridden
+show_top_n <- 9
 
 states <-
-  c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", 
-    "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
-    "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", 
-    "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", 
-    "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
-
-# for whatever reason, one of the vars appears to be mislabeled in the api
-allowable_vars <- c("total_discharges", "average_covered_charges", "average_medicare_payments")
-names(allowable_vars) <- c("Total Discharges", "Average Covered Charges", "Average Total Payments")
-
+  c(
+    "AK","AL","AR","AZ","CA","CO","CT","DC","DE","FL","GA",
+    "HI","IA","ID","IL","IN","KS","KY","LA","MA","MD",
+    "ME","MI","MN","MO","MS","MT","NC","ND","NE","NH",
+    "NJ","NM","NV","NY","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VA","VT","WA","WI","WV","WY"
+  )
 
 # preloads ====
 # not sure what the source for this
@@ -46,7 +44,7 @@ county_pop_call <-
                  `in` = "state:*")
   )
 county_mat <-
-  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1,])
+  data.frame(matrix(unlist(content(county_pop_call)), ncol = 3, byrow = TRUE)[-1, ])
 county_ref <- county_mat %>%
   unite(county_fips, c(X2, X3), sep = "") %>%
   mutate(pop =  strtoi(X1)) %>%
@@ -95,7 +93,7 @@ ui <-
       )
     ),
     # filtered tab ====
-    tabPanel("Explore the data", 
+    tabPanel("Explore the data",
              sidebarLayout(
                # TODO: filters by state -> county -> specific hospital
                # things I should be able to do:
@@ -104,17 +102,30 @@ ui <-
                # histograms of discharge # by state, county
                # histograms of discharge # by drg?
                sidebarPanel(
-                 selectInput("expl_drg", "Filter by DRG group", c("All groups", drg_groups$drg_definition)),
+                 selectInput(
+                   "expl_drg",
+                   "Filter by DRG group",
+                   c("All groups", drg_groups$drg_definition)
+                 ),
                  selectInput("expl_state", "Filter by state", c("All states", states)),
                  uiOutput("expl_hospital"),
-                 selectInput("expl_var", "Variable shown", allowable_vars),
-                 actionButton("submit_button", "Show selected data")), 
+                 uiOutput("expl_vars"),
+                 uiOutput("expl_group"),
+                 conditionalPanel("input.expl_hospital != 'None' && input.expl_drg != 'All groups'", 
+                                  "You can't filter on both these criteria!"),
+                 conditionalPanel("input.expl_hospital == 'None' || input.expl_drg == 'All groups'", 
+                                  actionButton("submit_button", "Show selected data")),
+               ),
                mainPanel(
-                 conditionalPanel("output.setempty", 
-                                  "Sorry, there is are no entries for this filter combination."),
-                 plotOutput("subset_plot"))
+                 conditionalPanel(
+                   "output.setempty",
+                   "Sorry, there is are no entries for this filter combination."
+                 ),
+
+                 conditionalPanel("output.singlehospital", plotlyOutput("single_plot")),
+                 conditionalPanel("output.multihospital", plotlyOutput("multi_plot"))
                )
-             )
+             ))
   ))
 
 # server function ====
@@ -314,7 +325,7 @@ server <- function(input, output) {
       ticktext <-
         pretty_print_large_number(log_scale_base ^ tickvals)
       tickmode <- array
-        "array" # forces choropleth to use passed in tickvals/ticktext
+      "array" # forces choropleth to use passed in tickvals/ticktext
     } else {
       zmin <- 0
       tickvals <- zmin + ((zmax - zmin) * tick_intervals)
@@ -384,27 +395,83 @@ server <- function(input, output) {
     input$expl_hospital != "None"
   })
   
+  grouping_var <- reactive({
+    quo(drg_definition)
+  })
+  
+  label_var <- reactive({
+    quo(drg_definition)
+  })
+  
   fetch_eligible_hospitals <- reactive({
-    eligible <- get_api_call(list("$select" = c("distinct provider_id", "provider_name"),
-                                  "$where" = paste("provider_state='", input$expl_state, "'", sep = ""),
-                                  "$order" = "provider_name"))
-    eligible <- eligible %>% mutate(display = paste(provider_name, " (ID: ", provider_id, ")", sep = ""))
+    eligible <-
+      get_api_call(list(
+        "$select" = c("distinct provider_id", "provider_name"),
+        "$where" = paste("provider_state='", input$expl_state, "'", sep = ""),
+        "$order" = "provider_name"
+      ))
+    eligible <-
+      eligible %>% mutate(display = paste(provider_name, " (ID: ", provider_id, ")", sep = ""))
     eligible
   })
   
   eligible_hospitals <- reactive({
     if (!is_state_filtered()) {
       eligible <- c("None")
-      names(eligible) <- c("All hospitals (select a state for more options)")
+      names(eligible) <-
+        c("All hospitals (select a state for more options)")
     } else {
       eligible <- c("None", fetch_eligible_hospitals()$provider_id)
-      names(eligible) <- c("All hospitals", fetch_eligible_hospitals()$display)
+      names(eligible) <-
+        c("All hospitals", fetch_eligible_hospitals()$display)
     }
     eligible
   })
   
+  eligible_vars <- reactive({
+    if (!is_drg_filtered()) {
+      eligible <- c("total_discharges")
+      names(eligible) <-
+        c("Total Discharges (select a DRG group for more options)")
+    } else {
+      eligible <-
+        c("total_discharges",
+          "average_covered_charges",
+          "average_medicare_payments")
+      names(eligible) <-
+        c("Total Discharges",
+          "Average Covered Charges",
+          "Average Total Payments")
+    }
+    eligible
+  })
+  
+  eligible_group <- reactive({
+    req(input$expl_drg, input$expl_hospital)
+    if (!is_drg_filtered() & !is_hospital_filtered()) {
+      eligible <- c("DRG", "Hospital")
+    } else if (is_drg_filtered()) {
+      eligible <- c("Hospital")
+      names(eligible) <-
+        c("Hospital (deselect DRG group for more options)")
+    } else if (is_hospital_filtered()) {
+      eligible <-
+        c("DRG")
+      names(eligible) <-
+        c("DRG (deselect hospital for more options)")
+    }
+    print(eligible)
+    eligible
+  })
+  
+  
+  
   select_string <- reactive({
-    select_string <- c(input$expl_var, "provider_id", "drg_definition")
+    select_string <-
+      c(input$expl_vars,
+        "provider_id",
+        "provider_name",
+        "drg_definition")
     if (is_state_filtered()) {
       select_string <- c(select_string, "provider_state")
     }
@@ -415,13 +482,18 @@ server <- function(input, output) {
     if (is_hospital_filtered()) {
       loc_string <- paste("provider_id=", input$expl_hospital, sep = "")
     } else if (is_state_filtered()) {
-      loc_string <- paste("provider_state='", input$expl_state, "'", sep = "")
+      loc_string <-
+        paste("provider_state='", input$expl_state, "'", sep = "")
     }
     loc_string
   })
   
   drg_string <- reactive({
-    drg_string <- paste("drg_definition='", URLencode(input$expl_drg, reserved = TRUE), "'", sep = "")
+    drg_string <-
+      paste("drg_definition='",
+            URLencode(input$expl_drg, reserved = TRUE),
+            "'",
+            sep = "")
   })
   
   where_string <- reactive({
@@ -429,7 +501,7 @@ server <- function(input, output) {
     if (is_state_filtered() | is_hospital_filtered()) {
       where_string <- c(where_string, loc_string())
     }
-    if (is_drg_filtered()){
+    if (is_drg_filtered()) {
       where_string <- c(where_string, drg_string())
     }
     where_string <- paste(where_string, collapse = " AND ")
@@ -438,22 +510,56 @@ server <- function(input, output) {
   
   fetch_filtered_data <- reactive({
     api_params <- list("$select" = select_string())
-    print(is_state_filtered() | is_hospital_filtered() | is_drg_filtered())
-    if (is_state_filtered() | is_hospital_filtered() | is_drg_filtered()) {
+    if (is_state_filtered() |
+        is_hospital_filtered() | is_drg_filtered()) {
       api_params[["$where"]] = where_string()
     }
     data <- get_api_call(api_params)
-    print(head(data))
     data
   })
   
   filter_set_num_hospital <- reactive({
-    
     n_distinct(fetch_filtered_data()$provider_id)
   })
   
   create_subset_plot <- reactive({
     data <- fetch_filtered_data()
+    data <- data %>% rename(value = 1) %>%
+      mutate(value = as.numeric(value)) %>%
+      group_by(!!grouping_var()) %>%
+      summarize(value = sum(value),
+                label = first(!!label_var())) %>%
+      arrange(desc(value))
+    data2 <- data %>%
+      top_n(show_top_n, value) %>%
+      mutate(order_val = c(1:show_top_n))
+    if (nrow(data) > show_top_n) {
+      misctotal <-
+        sum(data %>% filter(row_number() > show_top_n) %>% pull(value))
+      data <- bind_rows(data2,
+                        tibble(
+                          value = misctotal,
+                          label = "Other",
+                          order_val = show_top_n + 1
+                        ))
+    } else {
+      data <- data2
+    }
+    fig <-
+      plot_ly(
+        data,
+        x = data$order_val,
+        y = data$value,
+        type = "bar",
+        text = data$label,
+        hoverinfo = "y+text"
+      )
+    fig <-
+      fig %>% layout(
+        xaxis = list(showticklabels = FALSE),
+        title = paste("Top ", show_top_n, " ", input$expl_group, "s by Selected Variable", sep = "")
+      )
+    fig
   })
   
   load_subset_plot <- eventReactive(input$submit_button, {
@@ -462,19 +568,51 @@ server <- function(input, output) {
   })
   
   
-  output$expl_hospital <- renderUI({selectInput("expl_hospital", 
-                                                "Filter by hospital", 
-                                                eligible_hospitals())})
-
+  output$expl_hospital <- renderUI({
+    selectInput("expl_hospital",
+                "Filter by hospital",
+                eligible_hospitals())
+  })
+  
+  output$expl_vars <- renderUI({
+    selectInput("expl_vars",
+                "Display variable",
+                eligible_vars())
+  })
+  
+  output$expl_group <- renderUI({
+    selectInput("expl_group",
+                "Group variables by",
+                eligible_group())
+  })
+  
   
   output$setempty <- reactive({
     req(input$submit_button)
     filter_set_num_hospital() == 0
-    })
-  
+  })
   outputOptions(output, "setempty", suspendWhenHidden = FALSE)
   
-  output$subset_plot <- renderPlot({load_subset_plot()})
+  output$singlehospital <- reactive({
+    req(input$submit_button)
+    filter_set_num_hospital() == 2
+  })
+  outputOptions(output, "singlehospital", suspendWhenHidden = FALSE)
+  
+  output$multihospital <- reactive({
+    req(input$submit_button)
+    filter_set_num_hospital() >= 2
+  })
+  outputOptions(output, "multihospital", suspendWhenHidden = FALSE)
+  
+  
+  output$single_plot <- renderPlotly({
+    load_subset_plot()
+  })
+  output$multi_plot <- renderPlotly({
+    load_subset_plot()
+  })
+  
 }
 
 shinyApp(ui = ui, server = server)
