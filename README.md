@@ -1,4 +1,6 @@
 # STA-141b-Project
-# Hospitals
+Created during winter quarter 2019 by Earl Morales, Alanna Gerton, Anthony Hu, and Anmei Liu.
 
-https://github.com/Chicago/RSocrata
+Dataset from [data.cms.gov](https://data.cms.gov/Medicare-Inpatient/Inpatient-Prospective-Payment-System-IPPS-Provider/97k6-zzx3).
+
+Play with the [web app](https://anmeiliu.shinyapps.io/shinyapp/) at shinyapps.io.
