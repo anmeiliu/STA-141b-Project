@@ -416,7 +416,10 @@ server <- function(input, output) {
       marker = list(line = list(width = 1, color = "#000"))
       )
     fig <-
-      fig %>% layout(title = "Discharges per region")
+      fig %>% layout(
+        title = "Histogram of discharges per region", 
+        xaxis = list(title = "Discharges per region"),
+        yaxis = list(title = "Count"))
     fig
   })
 
@@ -634,8 +637,9 @@ server <- function(input, output) {
       )
     fig <-
       fig %>% layout(
+        title = paste("Top ", here_n, " ", input$expl_group, "s by ", selvar, sep = ""),
         xaxis = list(showticklabels = FALSE),
-        title = paste("Top ", here_n, " ", input$expl_group, "s by ", selvar, sep = "")
+        yaxis = list(title = selvar)
       )
     fig
   })
